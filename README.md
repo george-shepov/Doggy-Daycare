@@ -11,4 +11,4 @@ Static front-page prototype for daycare workflows.
 
 ## Quick start
 
-Open `/home/runner/work/Doggy-Daycare/Doggy-Daycare/index.html` in a browser.
+Open `index.html` from the project root in a browser.
