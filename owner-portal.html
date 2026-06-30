@@ -23,12 +23,45 @@
     <main>
       <div class="grid">
         <section class="card">
-          <h2>Book & Pre-pay</h2>
-          <ul class="tight">
-            <li>Select stay dates and requested services</li>
-            <li>Pre-pay daycare/boarding balances online</li>
-            <li>Track booking confirmation status</li>
-          </ul>
+          <h2>Book Appointment</h2>
+          <form id="appointment-form" class="booking-form compact">
+            <div class="field-row">
+              <label>Owner name<input name="owner" autocomplete="name" required /></label>
+              <label>Dog name<input name="dog" required /></label>
+            </div>
+            <label>Care needed<select name="service" required><option value="">Choose one</option><option>Daycare</option><option>Overnight stay</option><option>Extended stay</option><option>Meet-and-greet</option></select></label>
+            <div class="field-row">
+              <label>Date<input name="date" type="date" required /></label>
+              <label>Start time<input name="startTime" type="time" required /></label>
+            </div>
+            <div class="field-row">
+              <label>End time<input name="endTime" type="time" required /></label>
+              <label>Notes (optional)<input name="notes" maxlength="120" placeholder="Medication, behavior, pickup notes" /></label>
+            </div>
+            <button class="button primary" type="submit">Submit appointment request</button>
+            <p id="owner-form-status" class="form-status" role="status"></p>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2>My Appointment Requests</h2>
+          <p class="muted">Track request status in real time.</p>
+          <div class="table-wrap">
+            <table class="appointments-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Dog</th>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="owner-appointments-body"></tbody>
+            </table>
+          </div>
+          <p id="owner-appointments-empty" class="muted">No appointment requests yet.</p>
         </section>
 
         <section class="card">
@@ -46,5 +79,6 @@
     </main>
 
     <footer>Owner-facing booking, payment, and photo ordering prototype.</footer>
+    <script src="appointment-scheduler.js" defer></script>
   </body>
 </html>
