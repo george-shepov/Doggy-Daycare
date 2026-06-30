@@ -1,19 +1,78 @@
 document.addEventListener('DOMContentLoaded', function () {
-  var STORAGE_KEY = 'doggy_daycare_appointments_v1';
+  var DB_NAME = 'doggy_daycare_scheduler';
+  var DB_VERSION = 1;
+  var STORE_NAME = 'scheduler_data';
+  var STORE_KEY = 'appointments';
   var APPOINTMENT_STATUSES = ['Requested', 'Confirmed', 'Completed', 'Cancelled'];
+  var memoryFallback = [];
+  var dbPromise = null;
 
-  function readAppointments() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      return [];
-    }
+  function openDatabase() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise(function (resolve) {
+      var request = indexedDB.open(DB_NAME, DB_VERSION);
+
+      request.onupgradeneeded = function (event) {
+        var db = event.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+
+      request.onsuccess = function () {
+        resolve(request.result);
+      };
+
+      request.onerror = function () {
+        resolve(null);
+      };
+    });
+    return dbPromise;
   }
 
-  function writeAppointments(appointments) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+  function readFromStore(db) {
+    return new Promise(function (resolve) {
+      var tx = db.transaction(STORE_NAME, 'readonly');
+      var store = tx.objectStore(STORE_NAME);
+      var request = store.get(STORE_KEY);
+      request.onsuccess = function () {
+        var result = request.result;
+        resolve(Array.isArray(result) ? result : []);
+      };
+      request.onerror = function () {
+        resolve([]);
+      };
+    });
+  }
+
+  function writeToStore(db, appointments) {
+    return new Promise(function (resolve) {
+      var tx = db.transaction(STORE_NAME, 'readwrite');
+      var store = tx.objectStore(STORE_NAME);
+      store.put(appointments, STORE_KEY);
+      tx.oncomplete = function () {
+        resolve();
+      };
+      tx.onerror = function () {
+        resolve();
+      };
+    });
+  }
+
+  async function readAppointments() {
+    var db = await openDatabase();
+    if (!db) return memoryFallback.slice();
+    return readFromStore(db);
+  }
+
+  async function writeAppointments(appointments) {
+    var db = await openDatabase();
+    if (!db) {
+      memoryFallback = appointments.slice();
+      return;
+    }
+    await writeToStore(db, appointments);
   }
 
   function sortAppointments(appointments) {
@@ -24,8 +83,15 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  function updateAppointment(id, updater) {
-    var appointments = readAppointments();
+  function buildId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    return String(Date.now()) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  }
+
+  async function updateAppointment(id, updater) {
+    var appointments = await readAppointments();
     var changed = false;
     for (var i = 0; i < appointments.length; i += 1) {
       if (appointments[i].id === id) {
@@ -35,18 +101,18 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
     if (changed) {
-      writeAppointments(appointments);
+      await writeAppointments(appointments);
     }
     return changed;
   }
 
-  function removeAppointment(id) {
-    var appointments = readAppointments();
+  async function removeAppointment(id) {
+    var appointments = await readAppointments();
     var filtered = appointments.filter(function (item) {
       return item.id !== id;
     });
     if (filtered.length !== appointments.length) {
-      writeAppointments(filtered);
+      await writeAppointments(filtered);
       return true;
     }
     return false;
@@ -70,8 +136,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var bodyNode = document.getElementById('owner-appointments-body');
     var emptyNode = document.getElementById('owner-appointments-empty');
 
-    function renderOwnerRows() {
-      var appointments = sortAppointments(readAppointments());
+    async function renderOwnerRows() {
+      var appointments = sortAppointments(await readAppointments());
       if (!bodyNode) return;
       if (!appointments.length) {
         bodyNode.innerHTML = '';
@@ -98,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .join('');
     }
 
-    form.addEventListener('submit', function (event) {
+    form.addEventListener('submit', async function (event) {
       event.preventDefault();
       var data = new FormData(form);
       var owner = String(data.get('owner') || '').trim();
@@ -119,9 +185,9 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      var appointments = readAppointments();
+      var appointments = await readAppointments();
       appointments.push({
-        id: String(Date.now()) + '-' + Math.random().toString(16).slice(2),
+        id: buildId(),
         owner: owner,
         dog: dog,
         service: service,
@@ -132,27 +198,27 @@ document.addEventListener('DOMContentLoaded', function () {
         status: 'Requested',
         createdAt: new Date().toISOString()
       });
-      writeAppointments(appointments);
+      await writeAppointments(appointments);
       form.reset();
       if (statusNode) statusNode.textContent = 'Appointment request submitted.';
-      renderOwnerRows();
+      await renderOwnerRows();
     });
 
     if (bodyNode) {
-      bodyNode.addEventListener('click', function (event) {
+      bodyNode.addEventListener('click', async function (event) {
         var target = event.target;
         if (!(target instanceof HTMLButtonElement)) return;
         var action = target.getAttribute('data-action');
         var id = target.getAttribute('data-id');
         if (!id || action !== 'cancel-owner') return;
-        var changed = updateAppointment(id, function (item) {
+        var changed = await updateAppointment(id, function (item) {
           if (item.status === 'Requested' || item.status === 'Confirmed') {
             item.status = 'Cancelled';
           }
           return item;
         });
         if (changed) {
-          renderOwnerRows();
+          await renderOwnerRows();
           if (statusNode) statusNode.textContent = 'Appointment cancelled.';
         }
       });
@@ -182,8 +248,8 @@ document.addEventListener('DOMContentLoaded', function () {
       summaryNode.textContent = appointments.length + ' appointment(s), ' + activeCount + ' active request(s).';
     }
 
-    function getFilteredAppointments() {
-      var appointments = sortAppointments(readAppointments());
+    async function getFilteredAppointments() {
+      var appointments = sortAppointments(await readAppointments());
       var filterDate = dateFilter ? dateFilter.value : '';
       var filterStatus = statusFilter ? statusFilter.value : 'all';
       return appointments.filter(function (item) {
@@ -193,8 +259,8 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
-    function renderAdminRows() {
-      var filtered = getFilteredAppointments();
+    async function renderAdminRows() {
+      var filtered = await getFilteredAppointments();
       updateSummary(filtered);
       if (!filtered.length) {
         tableBody.innerHTML = '';
@@ -225,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .join('');
     }
 
-    tableBody.addEventListener('click', function (event) {
+    tableBody.addEventListener('click', async function (event) {
       var target = event.target;
       if (!(target instanceof HTMLButtonElement)) return;
       var action = target.getAttribute('data-action');
@@ -233,8 +299,8 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!id || !action) return;
 
       if (action === 'delete') {
-        removeAppointment(id);
-        renderAdminRows();
+        await removeAppointment(id);
+        await renderAdminRows();
         return;
       }
 
@@ -245,11 +311,11 @@ document.addEventListener('DOMContentLoaded', function () {
       };
       var nextStatus = actionToStatus[action];
       if (!nextStatus) return;
-      updateAppointment(id, function (item) {
+      await updateAppointment(id, function (item) {
         item.status = nextStatus;
         return item;
       });
-      renderAdminRows();
+      await renderAdminRows();
     });
 
     if (dateFilter) dateFilter.addEventListener('change', renderAdminRows);
