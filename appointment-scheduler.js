@@ -4,6 +4,11 @@ document.addEventListener('DOMContentLoaded', function () {
   var STORE_NAME = 'scheduler_data';
   var STORE_KEY = 'appointments';
   var APPOINTMENT_STATUSES = ['Requested', 'Confirmed', 'Completed', 'Cancelled'];
+  var ACTION_TO_STATUS_MAP = {
+    confirm: 'Confirmed',
+    cancel: 'Cancelled',
+    complete: 'Completed'
+  };
   var memoryFallback = [];
   var fallbackCounter = 0;
   var dbPromise = null;
@@ -95,8 +100,12 @@ document.addEventListener('DOMContentLoaded', function () {
       return window.crypto.randomUUID();
     }
     fallbackCounter += 1;
-    var seed = String(Date.now()) + '-' + String(fallbackCounter) + '-' + String(Math.floor(performance.now() * 1000));
+    var seed = String(Date.now()) + '-' + String(fallbackCounter) + '-' + Math.random().toString(36).slice(2);
     return seed;
+  }
+
+  function isCancelableStatus(status) {
+    return status === 'Requested' || status === 'Confirmed';
   }
 
   function toMinutes(timeString) {
@@ -164,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (emptyNode) emptyNode.style.display = 'none';
       bodyNode.innerHTML = appointments
         .map(function (item) {
-          var canCancel = item.status === 'Requested' || item.status === 'Confirmed';
+          var canCancel = isCancelableStatus(item.status);
           return (
             '<tr>' +
             '<td>' + item.date + '</td>' +
@@ -289,7 +298,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .map(function (item) {
           var actions = [];
           if (item.status === 'Requested') actions.push('<button type="button" data-action="confirm" data-id="' + item.id + '">Confirm</button>');
-          if (item.status === 'Requested' || item.status === 'Confirmed') actions.push('<button type="button" data-action="cancel" data-id="' + item.id + '">Cancel</button>');
+          if (isCancelableStatus(item.status)) actions.push('<button type="button" data-action="cancel" data-id="' + item.id + '">Cancel</button>');
           if (item.status === 'Confirmed') actions.push('<button type="button" data-action="complete" data-id="' + item.id + '">Complete</button>');
           actions.push('<button type="button" data-action="delete" data-id="' + item.id + '">Delete</button>');
 
@@ -321,12 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
       }
 
-      var actionToStatus = {
-        confirm: 'Confirmed',
-        cancel: 'Cancelled',
-        complete: 'Completed'
-      };
-      var nextStatus = actionToStatus[action];
+      var nextStatus = ACTION_TO_STATUS_MAP[action];
       if (!nextStatus) return;
       await updateAppointment(id, function (item) {
         item.status = nextStatus;
