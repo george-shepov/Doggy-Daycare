@@ -5,13 +5,20 @@ document.addEventListener('DOMContentLoaded', function () {
   var STORE_KEY = 'appointments';
   var APPOINTMENT_STATUSES = ['Requested', 'Confirmed', 'Completed', 'Cancelled'];
   var memoryFallback = [];
+  var fallbackCounter = 0;
   var dbPromise = null;
 
   function openDatabase() {
     if (!('indexedDB' in window)) return Promise.resolve(null);
     if (dbPromise) return dbPromise;
     dbPromise = new Promise(function (resolve) {
-      var request = indexedDB.open(DB_NAME, DB_VERSION);
+      var request;
+      try {
+        request = indexedDB.open(DB_NAME, DB_VERSION);
+      } catch (error) {
+        resolve(null);
+        return;
+      }
 
       request.onupgradeneeded = function (event) {
         var db = event.target.result;
@@ -87,7 +94,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
       return window.crypto.randomUUID();
     }
-    return String(Date.now()) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    fallbackCounter += 1;
+    var seed = String(Date.now()) + '-' + String(fallbackCounter) + '-' + String(Math.floor(performance.now() * 1000));
+    return seed;
+  }
+
+  function toMinutes(timeString) {
+    var match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(timeString || '');
+    if (!match) return null;
+    return Number(match[1]) * 60 + Number(match[2]);
   }
 
   async function updateAppointment(id, updater) {
@@ -125,7 +140,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function isValidTimeRange(startTime, endTime) {
-    return Boolean(startTime && endTime && startTime < endTime);
+    var startMinutes = toMinutes(startTime);
+    var endMinutes = toMinutes(endTime);
+    return startMinutes !== null && endMinutes !== null && startMinutes < endMinutes;
   }
 
   function initOwnerPortal() {
@@ -195,8 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
         startTime: startTime,
         endTime: endTime,
         notes: notes,
-        status: 'Requested',
-        createdAt: new Date().toISOString()
+        status: 'Requested'
       });
       await writeAppointments(appointments);
       form.reset();
@@ -236,16 +252,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var dateFilter = document.getElementById('admin-filter-date');
     var statusFilter = document.getElementById('admin-filter-status');
 
-    function updateSummary(appointments) {
+    function updateSummary(totalCount, filteredCount, activeCount) {
       if (!summaryNode) return;
-      if (!appointments.length) {
+      if (!totalCount) {
         summaryNode.textContent = 'No appointments scheduled.';
         return;
       }
-      var activeCount = appointments.filter(function (item) {
-        return item.status === 'Requested' || item.status === 'Confirmed';
-      }).length;
-      summaryNode.textContent = appointments.length + ' appointment(s), ' + activeCount + ' active request(s).';
+      summaryNode.textContent = totalCount + ' total appointment(s), ' + filteredCount + ' shown, ' + activeCount + ' active request(s).';
     }
 
     async function getFilteredAppointments() {
@@ -260,8 +273,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function renderAdminRows() {
+      var allAppointments = sortAppointments(await readAppointments());
       var filtered = await getFilteredAppointments();
-      updateSummary(filtered);
+      var activeCount = allAppointments.filter(function (item) {
+        return item.status === 'Requested' || item.status === 'Confirmed';
+      }).length;
+      updateSummary(allAppointments.length, filtered.length, activeCount);
       if (!filtered.length) {
         tableBody.innerHTML = '';
         if (emptyNode) emptyNode.style.display = 'block';
