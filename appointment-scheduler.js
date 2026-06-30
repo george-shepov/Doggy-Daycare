@@ -100,12 +100,31 @@ document.addEventListener('DOMContentLoaded', function () {
       return window.crypto.randomUUID();
     }
     fallbackCounter += 1;
-    var seed = String(Date.now()) + '-' + String(fallbackCounter) + '-' + Math.random().toString(36).slice(2);
+    var randomToken = '';
+    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      var bytes = new Uint8Array(12);
+      window.crypto.getRandomValues(bytes);
+      randomToken = Array.from(bytes, function (byte) {
+        return byte.toString(16).padStart(2, '0');
+      }).join('');
+    } else {
+      randomToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    }
+    var seed = String(Date.now()) + '-' + String(fallbackCounter) + '-' + randomToken;
     return seed;
   }
 
   function isCancelableStatus(status) {
     return status === 'Requested' || status === 'Confirmed';
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function toMinutes(timeString) {
@@ -174,12 +193,17 @@ document.addEventListener('DOMContentLoaded', function () {
       bodyNode.innerHTML = appointments
         .map(function (item) {
           var canCancel = isCancelableStatus(item.status);
+          var safeDate = escapeHtml(item.date);
+          var safeStartTime = escapeHtml(item.startTime);
+          var safeEndTime = escapeHtml(item.endTime);
+          var safeDog = escapeHtml(item.dog);
+          var safeService = escapeHtml(item.service);
           return (
             '<tr>' +
-            '<td>' + item.date + '</td>' +
-            '<td>' + item.startTime + ' - ' + item.endTime + '</td>' +
-            '<td>' + item.dog + '</td>' +
-            '<td>' + item.service + '</td>' +
+            '<td>' + safeDate + '</td>' +
+            '<td>' + safeStartTime + ' - ' + safeEndTime + '</td>' +
+            '<td>' + safeDog + '</td>' +
+            '<td>' + safeService + '</td>' +
             '<td>' + createStatusBadge(item.status) + '</td>' +
             '<td class="actions-cell">' +
             (canCancel ? '<button type="button" data-action="cancel-owner" data-id="' + item.id + '">Cancel</button>' : '') +
@@ -237,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var id = target.getAttribute('data-id');
         if (!id || action !== 'cancel-owner') return;
         var changed = await updateAppointment(id, function (item) {
-          if (item.status === 'Requested' || item.status === 'Confirmed') {
+          if (isCancelableStatus(item.status)) {
             item.status = 'Cancelled';
           }
           return item;
@@ -297,6 +321,12 @@ document.addEventListener('DOMContentLoaded', function () {
       tableBody.innerHTML = filtered
         .map(function (item) {
           var actions = [];
+          var safeDate = escapeHtml(item.date);
+          var safeStartTime = escapeHtml(item.startTime);
+          var safeEndTime = escapeHtml(item.endTime);
+          var safeOwner = escapeHtml(item.owner);
+          var safeDog = escapeHtml(item.dog);
+          var safeService = escapeHtml(item.service);
           if (item.status === 'Requested') actions.push('<button type="button" data-action="confirm" data-id="' + item.id + '">Confirm</button>');
           if (isCancelableStatus(item.status)) actions.push('<button type="button" data-action="cancel" data-id="' + item.id + '">Cancel</button>');
           if (item.status === 'Confirmed') actions.push('<button type="button" data-action="complete" data-id="' + item.id + '">Complete</button>');
@@ -304,11 +334,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
           return (
             '<tr>' +
-            '<td>' + item.date + '</td>' +
-            '<td>' + item.startTime + ' - ' + item.endTime + '</td>' +
-            '<td>' + item.owner + '</td>' +
-            '<td>' + item.dog + '</td>' +
-            '<td>' + item.service + '</td>' +
+            '<td>' + safeDate + '</td>' +
+            '<td>' + safeStartTime + ' - ' + safeEndTime + '</td>' +
+            '<td>' + safeOwner + '</td>' +
+            '<td>' + safeDog + '</td>' +
+            '<td>' + safeService + '</td>' +
             '<td>' + createStatusBadge(item.status) + '</td>' +
             '<td class="actions-cell">' + actions.join('') + '</td>' +
             '</tr>'
