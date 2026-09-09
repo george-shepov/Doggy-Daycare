@@ -33,11 +33,28 @@
 
         <section class="card">
           <h2>Appointment Scheduling</h2>
-          <ul class="tight">
-            <li>Assign drop-off and pick-up windows</li>
-            <li>Confirm requested daycare stays</li>
-            <li>Review upcoming occupancy</li>
-          </ul>
+          <div class="field-row compact-filters">
+            <label for="admin-filter-date"><span>Filter by date</span><input id="admin-filter-date" type="date" /></label>
+            <label for="admin-filter-status"><span>Status</span><select id="admin-filter-status"><option value="all">All</option><option value="Requested">Requested</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option></select></label>
+          </div>
+          <p id="admin-summary" class="muted">No appointments scheduled.</p>
+          <div class="table-wrap">
+            <table class="appointments-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Owner</th>
+                  <th>Dog</th>
+                  <th>Service</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-appointments-body"></tbody>
+            </table>
+          </div>
+          <p id="admin-appointments-empty" class="muted">No appointments match the current filters.</p>
         </section>
 
         <section class="card">
@@ -52,5 +69,6 @@
     </main>
 
     <footer>Admin prototype for customer operations and photo management.</footer>
+    <script src="appointment-scheduler.js" defer></script>
   </body>
 </html>
